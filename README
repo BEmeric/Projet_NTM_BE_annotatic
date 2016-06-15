@@ -1,0 +1,65 @@
+16/09/2015
+NTM
+BANKOLE Eméric (BE)
+
+I wrote a new version of annotatic from scratch because Alice's version
+was buggy and had too many defects.
+
+While doing so I identified several problems and fixed them, eg:
+problem with ID line (have to select relevant OIDs), problem
+with OPOS too big, etc...
+
+
+annotatic_alice.pl : Alice's "final" krakenator version.
+
+annotatic_ntm_150915.pl : initial version deployed at IBP yesterday,
+however I then made some changes directly on the IonServer, eg path
+customizations.
+ 
+annotatic_IBP_150915.pl: customized version for the IBP IonServer,
+with small improvements over annotatic_ntm_150915.pl .
+
+
+annotatic_ntm_150916.pl : updated version (fixing COSM and some other 
+rare issues, improved comments and code structure), and also merging in
+the changes between annotatic_ntm_150915.pl and annotatic_IBP_150915.pl .
+Now all changes needed when deploying at IBP are three global vars in
+the first section of the code, commented "IBP".
+
+
+annotatic_fromIBP_150917.pl : version from IBP where I had fixed a bunch 
+of issues online. Not sure what this was based on...
+
+annotatic_ntm_150922.pl : fixed a few things for IBP, eg the csv file
+should be called .txt otherwise they have issues opening it in excel (!!!),
+and many die's are replaced by warnings because the unexpected does happen
+and we don't want to kill the plugin.
+
+annotatic_IBP_150922.pl: same as above but with the few IBP customizations.
+
+annotatic_ntm_151019.pl: change $genome_fasta to non-gzipped version to make
+HGVS work, update $NM_file, and fixed a bug due to splicing when a genotype
+call calls hetero for two different alt alleles (ie no ref allele).
+
+
+annotatic_ntm_151022.pl: ignore the OPOS skipping method because too many FNs.
+
+annotatic_ntm_151117.pl: replace %3D with = (for HGVS synonymous SNPs); and fix step3
+so that when there are no variants we skip infile instead of dying.
+
+annotatic_ntm_160322.pl: code cleanup (remove the OPOS skipping code which was no
+longer used=); disguise VCF lines coming from GATK for long-indels so they look
+like "normal" FreeBayes lines (mainly: add F to DP et al fields, see STEP 1B);
+consider OID+OMAPALT as optional (don't skip if they are not there).
+
+annotatic_ntm_BE_260516.pl: recovering of original variants (OALT) and original reference (OREF);
+then it's important to grab good oalt and good oref in respective fields and in correct position
+if we want to have  rigth annotation from VEP. Same thing was done for OPOS's value which give the good
+position of orignial variant.  
+See STEP 1C from line 267 to line 297 and from line 314 to 346.
+And in STEP 1E from line 392, we also display in (file)_clean.vcf the good values of good OPOS, OALT and OREF.
+
+annotatic_ntm_BE_270516.pl: put the allelic frequencies in percent (see line 412 in STEP 1E).
+In hgvs's fields, the NM annotations are removed; same to the MAF's annotations. (see in STEP 3 from line 579 to line 601)
+
+Following step, make interface which interact with annotatic and allow to choose annotation's fields of interest. 
