@@ -29,9 +29,9 @@ use warnings;
 #####################################################################
 
 # absolute path of plugin and data etc...
-#my $pluginPath = "./" ;
+my $pluginPath = "./" ;
 # IBP:
-my $pluginPath = "/results/plugins/annotatic/" ;
+#my $pluginPath = "/results/plugins/annotatic/" ;
 
 
 # file holding the list of refseq NM ids for the transcripts of interest.
@@ -44,9 +44,9 @@ my $genome_fasta = "$pluginPath/data/hg19/Homo_sapiens.GRCh37.75.dna.primary_ass
 #my $genome_fasta = "/results/referenceLibrary/tmap-f3/hg19/hg19.fasta" ;
 
 # number of jobs that VEP can generate in parallel (--fork)
-#my $jobs = 4 ;
+my $jobs = 4 ;
 # IBP:
-my $jobs = 6 ;
+#my $jobs = 6 ;
 
 # good fields in INFO column
 # these fields are either single-valued, or have as many comma-separated values as ALT column
@@ -155,6 +155,11 @@ while (my $infile=readdir(INDIR)) {
     open(IN,"$indir/$infile") || die "cannot open $indir/infile for reading\n" ;
     open(OUT, ">$outClean") ||	die "cannot open $outClean for writing\n" ;
 
+    # lines to be printed are stored in array and sorted+printed only
+    # when we change CHROMs
+    my @outBuffer = () ;
+    my $prevChr = "" ;
+
   LINES1: while(my $line = <IN>) {
       chomp $line;
       # header lines: just copy
@@ -167,6 +172,22 @@ while (my $infile=readdir(INDIR)) {
       my @alts = split(/,/,$alt) ;
       # normalize $info: add leading and trailing ';'
       $info = ";$info;" ;
+      # initialize $prevChr
+      ($prevChr) || ($prevChr = $chr) ;
+
+
+      #####################################################################
+      ##### STEP 1Z: print buffer lines if we changed chrom
+      #####################################################################
+      if ($prevChr ne $chr) {
+	  foreach my $line (sort sortVCF @outBuffer) {
+	      print OUT "$prevChr\t$line" ;
+	  }
+	  $prevChr = $chr ;
+	  @outBuffer = () ;
+      }
+
+
 
       #####################################################################
       ##### STEP 1A: filter out bad lines and/or bad ALT alleles
@@ -235,118 +256,80 @@ while (my $infile=readdir(INDIR)) {
       }
 
       #####################################################################
-      ##### STEP 1C: build ID values
+      ##### STEP 1C: build ID values and grab good OREF/OALT/OPOS for called variants
       #####################################################################
 
       # Build the IDs for each goodAlt, one ID string per goodAlt. This
-      # is stored in @ids, indexed by elements of @goodAltIndexes.
+      # is stored in @ids, indexed by the indexes of @goodAltIndexes.
       my @ids = () ;
-      # We grab those in OID field, taking the OIDs whose OMAPALT
-      # matches each goodAlt.
-      # We will use these in the ID line instead of the initial content if
-      # that ID column, which cannot be used (see NOTE below).
-      # NOTE: we can have 2 COSM ids in ID, 2 ALT alleles, but 
-      # 3 OID+OMAPALT... Example:
-      # chr3	178952041	COSM1663505;COSM1663504	G	A,C [...]
-      # OID=.,COSM1663505,COSM1663504;OPOS=178952041,178952041,178952041;OREF=G,G,G;OMAPALT=A,C,C;
-      # In this case the A ALT allele is not present in either COSM!
-      # So, we must discard $id and use OID based on OMAPALT...
-      my @oid = ();
-      my @omapalt = ();
+      # We also construct arrays @goodoref, @goodoalt and @goodopos, also 
+      # indexed by the indexes of @goodAltIndexes, holding the "original"
+      # REF/ALT/POS of the corresponding alt allele.
+      my @goodoref = ();
+      my @goodoalt = ();
+      my @goodopos = ();
 
-      if ($info =~ /OID=([^;]+);/) {
-	  @oid = split(/,/,$1) ;
+      # following block to limit scope of local variables
+      {
+	  # We grab the good IDs in OID field, taking the OIDs whose OMAPALT
+	  # matches each goodAlt.
+	  # We will use these in the ID line instead of the initial content if
+	  # that ID column, which cannot be used (see NOTE below).
+	  # NOTE: we can have 2 COSM ids in ID, 2 ALT alleles, but 
+	  # 3 OID+OMAPALT... Example:
+	  # chr3	178952041	COSM1663505;COSM1663504	G	A,C [...]
+	  # OID=.,COSM1663505,COSM1663504;OPOS=178952041,178952041,178952041;OREF=G,G,G;OMAPALT=A,C,C;
+	  # In this case the A ALT allele is not present in either COSM!
+	  # So, we must discard $id and use OID based on OMAPALT...
+	  my @oid = ();
+	  my @omapalt = ();
+	  my @oalt = ();
+	  my @oref = ();
+	  my @opos = ();
+
+	  if ($info =~ /OID=([^;]+);/) {
+	      @oid = split(/,/,$1) ;
+	  }
+	  if ($info =~ /OMAPALT=([^;]+);/) {
+	      @omapalt = split(/,/,$1) ;
+	  }
+	  if ($info =~ /OALT=([^;]+);/) {
+	      @oalt = split(/,/,$1) ;
+	  }
+	  if ($info =~ /OREF=([^;]+);/) {
+	      @oref = split(/,/,$1) ;
+	  }
+	  if ($info =~ /OPOS=([^;]+);/) {
+	      @opos = split(/,/,$1) ;
+	  }
+
+	  ((@oid == @omapalt) && (@oid == @oalt) && (@oid == @oref) && (@oid == @opos) ) ||
+	      die "in step 1C: not same number of values in oid and omapalt/oalt/oref/opos in:\n$line\n" ;
+
+	  # grab good O* corresponding to goodAlts
+	  foreach my $i (0..$#goodAltIndexes) {
+	      $ids[$i] = "" ;
+	      $goodoref[$i] = "";
+	      $goodoalt[$i] = "";
+	      $goodopos[$i] = "";
+	      foreach my $j (0..$#oid) {
+		  if ($omapalt[$j] eq $alts[$goodAltIndexes[$i]]) {
+		      # the j-th OMAPALT matches the i-th goodAlt
+		      if ($oid[$j] ne ".") {
+			  # this o* has an OID and it's not '.'
+			  ($ids[$i]) && ($ids[$i] .= ";") ;
+			  $ids[$i] .= $oid[$j] ;
+		      }
+		      $goodoref[$i] = $oref[$j] ;
+		      $goodoalt[$i] = $oalt[$j] ;
+		      $goodopos[$i] = $opos[$j] ;
+		  }
+	      }
+	      # if no IDs found, use '.'
+	      ($ids[$i]) || ($ids[$i] = ".") ;
+	  }
       }
-      if ($info =~ /OMAPALT=([^;]+);/) {
-	  @omapalt = split(/,/,$1) ;
-      }
-      (@oid == @omapalt) || 
-	  die "in step 1C: not same number of values in oid and omapalt in:\n$line\n" ;
-
-
-    #################### Adding code line from emeric 25/05/16 #######
-
-    my @goodoref = (); #modif emeric
-    my @goodoalt = (); #modif emeric
-    my @goodopos = (); #modif emeric
-
-    #grab original variants in a list.
-
-    my @oalt = ();
-    if ($info =~ /OALT=([^;]+);/) {
-      @oalt = split(/,/,$1) ;
-      #print "$1\n" ; # modif de emeric  *******
-
-    }
-
-    #grab original reference in a list
-
-    my @oref = ();
-    if ($info =~ /OREF=([^;]+);/) {
-      @oref = split(/,/,$1) ;
-      #print "$1\n" ; # modif de emeric  *******
-    }
-
-    #grab original OPOS in a list
-    my @opos = ();
-    if ($info =~ /OPOS=([^;]+);/) {
-      @opos = split(/,/,$1) ;
-      #print "$1\n" ; # modif de emeric  *******
-    }
-
-    #######################End of adding ############################
-
-      
-      foreach my $i (0..$#goodAltIndexes) {
-    	  $ids[$i] = "" ;
-    	  foreach my $j (0..$#oid) {
-          if (($omapalt[$j] eq $alts[$goodAltIndexes[$i]]) && 
-    		  ($oid[$j] ne ".")) {
-      		  # the j-th OMAPALT matches the i-th goodAlt, and it's not '.'
-      		  ($ids[$i]) && ($ids[$i] .= ";") ;
-      		  $ids[$i] .= $oid[$j] ;
-    	     }
-    	  }
-    	  # if no IDs found, use '.'
-    	  ($ids[$i]) || ($ids[$i] = ".") ;
-    }
-
-    #################### Adding code line from emeric 25/05/16#########
-
-    # recovering of good oref in OREF's fields
-    foreach my $i (0..$#goodAltIndexes) {
-        $goodoref[$i] = "";
-        foreach my $j (0..$#oid) {
-          if (($omapalt[$j] eq $alts[$goodAltIndexes[$i]]) && ($oref[$j] ne "")) {
-            $goodoref[$i] = $oref[$j] ;
-          } 
-      }
-    }
-
-    # recovering of good oalt in OALT's field
-    foreach my $i (0..$#goodAltIndexes) {
-        $goodoalt[$i] = "";
-        foreach my $j (0..$#oid) {
-          if (($omapalt[$j] eq $alts[$goodAltIndexes[$i]]) && ($oalt[$j] ne "")) {
-            $goodoalt[$i] = $oalt[$j] ;
-          } 
-      }
-    }
-
-    #récupérer les bons OPOS
-    foreach my $i (0..$#goodAltIndexes) {
-        $goodopos[$i] = "";
-        foreach my $j (0..$#oid) {
-          if (($omapalt[$j] eq $alts[$goodAltIndexes[$i]]) && ($opos[$j] ne "")) {
-            $goodopos[$i] = $opos[$j] ;
-          } 
-      }
-    }
-
-    #######################End of adding ################################
-
-
-
+ 
 
       #####################################################################
       ##### STEP 1D: grab good fields from INFO
@@ -384,14 +367,12 @@ while (my $infile=readdir(INDIR)) {
 
 
       #####################################################################
-      ##### STEP 1E: output lines, one line per alt allele if it was called
+      ##### STEP 1E: prepare output lines, one line per alt allele if it was called
       #####################################################################
 
       foreach my $i (0..$#goodAltIndexes) {
-        #take good ref from OREF, good alt from OALT and good position from OPOS. 
-        print OUT "$chr\t$goodopos[$i]\t$ids[$i]\t$goodoref[$i]\t$goodoalt[$i]\t", "\t$qual\t$filter\t" ;   # modif de emeric  *******
-
-	  #print OUT "$chr\t$pos\t",$ids[$i],"\t$ref\t", $alts[$goodAltIndexes[$i]], "\t$qual\t$filter\t" ;
+	  #take good ref from OREF, good alt from OALT and good position from OPOS. 
+	  push(@outBuffer, "$goodopos[$i]\t$ids[$i]\t$goodoref[$i]\t$goodoalt[$i]\t$qual\t$filter\t") ;
 	  # NEW INFO COLUMN:
 	  # construct new GT string: HET or HOMOVAR
 	  my $geno = "HET" ;
@@ -399,29 +380,32 @@ while (my $infile=readdir(INDIR)) {
 	  # as well as one line with different genos (must be 0/x or x/0).
 	  # the only case that's not HET is HOMOVAR when both genos are equal
 	  ($geno1 == $geno2) && ($geno = "HOMOVAR") ;
-	  print OUT "GT=$geno;GQ=$genoq" ; # no trailing ';', we'll add it later to avoid the final ';'
+	  $outBuffer[$#outBuffer] .= "GT=$geno;GQ=$genoq" ; # no trailing ';', we'll add it later to avoid the final ';'
 	  
-    # fill remaining good INFO fields
-   
+	  # fill remaining good INFO fields
+	  
 	  foreach my $f (@goodFieldsInfoSingle) {
-      print OUT ";$f=", $data{$f} ;
+	      $outBuffer[$#outBuffer] .= ";$f=".$data{$f} ;
 	  }
 
-     # Conversion of allelic frequency in percentage
+	  # Conversion of allelic frequency in percentage
 	  foreach my $f (@goodFieldsInfoMulti) {
-      ($f eq "AF") && (${$data{$f}}[$i] = sprintf("%.0f", (${$data{$f}}[$i] * 100))."%") ;  ### modif emeric
-      print OUT ";$f=", ${$data{$f}}[$i] ;
+	      ($f eq "AF") && (${$data{$f}}[$i] = sprintf("%.0f", (${$data{$f}}[$i] * 100))."%") ;  ### modif emeric
+	      $outBuffer[$#outBuffer] .= ";$f=".${$data{$f}}[$i] ;
 	  }
 	  # OK, we don't keep FORMAT and indiv lines, useless
-	  print OUT "\n" ;
+	  $outBuffer[$#outBuffer] .= "\n" ;
       }
   }
     close(IN);
+    # output for last chrom
+    foreach my $line (sort sortVCF @outBuffer) {
+	print OUT "$prevChr\t$line" ;
+    }
     close(OUT);
 
-
     #####################################################################
-    ##### STEP  2
+    ##### STEP  2: annotate with VEP
     #####################################################################
 
     # annotate $outClean with VEP, result goes in $outVep
@@ -576,30 +560,24 @@ while (my $infile=readdir(INDIR)) {
 		$outline .= "\t".$data{"FRO"}."(".$data{"FSRF"}."/".$data{"FSRR"}.")" ;
 		$outline .= "\t".$data{"FAO"}."(".$data{"FSAF"}."/".$data{"FSAR"}.")" ;
 
-#################### Adding code line from emeric 27/05/16 ##############
-
-    # modify "HGVSc" and "HGVSp" 's field. ############## add (emeric)
-
-      #print $thisCsq{"HGVSc"} . "\n";
-      $thisCsq{"HGVSc"} =~ s/^[A-Z]+_\d+.\d://;
-      #print $thisCsq{"HGVSc"} . "\n";
-
-      #print $thisCsq{"HGVSp"} . "\n";
-      $thisCsq{"HGVSp"} =~ s/^[A-Z]+_\d+.\d://;
-      #print $thisCsq{"HGVSp"} . "\n";
+		# modify "HGVSc" and "HGVSp" 's field: remove NM_* component (BE)
+		($thisCsq{"HGVSc"} =~ s/^[A-Z]+_\d+.\d://) || 
+		    (warn "could not remove refseq ID from HGVSc, FIXME? ".$thisCsq{"HGVSc"}."\n") ;
+		($thisCsq{"HGVSp"} =~ s/^[A-Z]+_\d+.\d://) || 
+		    (warn "could not remove refseq ID from HGVSp, FIXME? ".$thisCsq{"HGVSp"}."\n") ;
 
 
-    # modify MAF's data ################################# add (emeric)
 
-      foreach my $vepName (@goodVeps){
-        if ($vepName =~ /^[A-Z]+_?MAF/) {
-          $thisCsq{"$vepName"} =~ s/[A-Z]+://;
-                #print $thisCsq{"$vepName"} . "\n";
-            }
-        }
-
-  #######################End of adding #################################
-
+		# modify MAF's data to remove allele eg A:0.92 -> 0.92
+		# CANNOT DO THIS
+		# because the allele can be the ALT or REF, this can change from line to
+		# line and even from col to col within one line!
+		#
+		# foreach my $vepName (@goodVeps){
+		#     if ($vepName =~ /^[A-Z]+_?MAF/) {
+		# 	$thisCsq{"$vepName"} =~ s/[A-Z]+://;
+		#     }
+		# }
 
 		# OK, VEP annotations from @goodVeps now:
 		foreach my $vepName (@goodVeps) {
@@ -626,12 +604,6 @@ while (my $infile=readdir(INDIR)) {
 }
 
 closedir(INDIR) ;
-
-
-
-
-
-
 
 
 
@@ -678,4 +650,14 @@ sub buildNMs {
     }
     close(NM) ;
     return(%goodNMs);
+}
+
+
+# custom sort for vcf lines without CHROM: sort by POS
+sub sortVCF {
+    ($a =~ /^([^\t]+)\t/) || die "in sortVCF cannot extract pos1 from $a\n" ;
+    my $pos1 = $1 ;
+    ($b =~ /^([^\t]+)\t/) || die "in sortVCF cannot extract pos2 from $b\n" ;
+    my $pos2 = $1 ;
+    return($pos1 <=> $pos2) ;
 }
