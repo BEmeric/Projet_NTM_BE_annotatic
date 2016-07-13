@@ -52,14 +52,22 @@ longer used=); disguise VCF lines coming from GATK for long-indels so they look
 like "normal" FreeBayes lines (mainly: add F to DP et al fields, see STEP 1B);
 consider OID+OMAPALT as optional (don't skip if they are not there).
 
-annotatic_ntm_BE_260516.pl: recovering of original variants (OALT) and original reference (OREF);
-then it's important to grab good oalt and good oref in respective fields and in correct position
-if we want to have  rigth annotation from VEP. Same thing was done for OPOS's value which give the good
-position of orignial variant.  
+annotatic_ntm_BE_260516.pl: recovering of original variants (OALT) and original 
+reference (OREF); then it's important to grab good oalt and good oref in respective 
+fields and in correct position if we want to have  right annotation from VEP. 
+Same thing was done for OPOS's value which give the good position of orignial variant.  
 See STEP 1C from line 267 to line 297 and from line 314 to 346.
-And in STEP 1E from line 392, we also display in (file)_clean.vcf the good values of good OPOS, OALT and OREF.
+And in STEP 1E from line 392, we also display in (file)_clean.vcf the good values of 
+good OPOS, OALT and OREF.
 
-annotatic_ntm_BE_270516.pl: put the allelic frequencies in percent (see line 412 in STEP 1E).
-In hgvs's fields, the NM annotations are removed; same to the MAF's annotations. (see in STEP 3 from line 579 to line 601)
+annotatic_ntm_BE_270516.pl: put the allelic frequencies in percent (see line 412 
+in STEP 1E).
+In hgvs's fields, the NM annotations are removed; same to the MAF's annotations. 
+(see in STEP 3 from line 579 to line 601)
+Following step, make interface which interact with annotatic and allow to choose 
+annotation's fields of interest. 
 
-Following step, make interface which interact with annotatic and allow to choose annotation's fields of interest. 
+
+annotatic_ntm_BE_160712.pl: reworked annotatic_ntm_BE_160527.pl: restructured/validated BE's
+changes, fixed a few things. Committed to github.
+
