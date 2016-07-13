@@ -29,9 +29,9 @@ use warnings;
 #####################################################################
 
 # absolute path of plugin and data etc...
-my $pluginPath = "./" ;
+#my $pluginPath = "./" ;
 # IBP:
-#my $pluginPath = "/results/plugins/annotatic/" ;
+my $pluginPath = "/results/plugins/annotatic/" ;
 
 
 # file holding the list of refseq NM ids for the transcripts of interest.
@@ -44,9 +44,9 @@ my $genome_fasta = "$pluginPath/data/hg19/Homo_sapiens.GRCh37.75.dna.primary_ass
 #my $genome_fasta = "/results/referenceLibrary/tmap-f3/hg19/hg19.fasta" ;
 
 # number of jobs that VEP can generate in parallel (--fork)
-my $jobs = 4 ;
+#my $jobs = 4 ;
 # IBP:
-#my $jobs = 6 ;
+my $jobs = 6 ;
 
 # good fields in INFO column
 # these fields are either single-valued, or have as many comma-separated values as ALT column
