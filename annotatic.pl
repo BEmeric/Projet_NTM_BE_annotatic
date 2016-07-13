@@ -55,7 +55,7 @@ my @goodFieldsInfoMulti = ("AF","FAO","FSAF","FSAR","HRUN","TYPE");
 # other good fields, from FORMAT/indiv column: GT and GQ, get special treatment
 # and will become regular INFO fields after step 1 (but GT will be changed to a string)
 my @goodFieldsExtra = ("GT","GQ") ;
-# NOTE: we will also use OID and OPOS from the INFO column if they exist,
+# NOTE: we will also use OID and OPOS/OREF/OALT from the INFO column if they exist,
 # but these are dealt with separately later because they are multi-valued
 # but the number of values they have doesn't match the number of ALTs
 
@@ -320,6 +320,13 @@ while (my $infile=readdir(INDIR)) {
 			  ($ids[$i]) && ($ids[$i] .= ";") ;
 			  $ids[$i] .= $oid[$j] ;
 		      }
+		      # sanity: if we find several orefs they shoud be identical
+		      (! $goodoref[$i]) || ($goodoref[$i] eq $oref[$j]) ||
+			  (warn "in step 1C: found several different goodoref for variant $i, discarding $goodoref[$i] and using the latest ie $oref[$j] . Line is:\n$line\n") ;
+		      (! $goodoalt[$i]) || ($goodoalt[$i] eq $oalt[$j]) ||
+			  (warn "in step 1C: found several different goodoalt for variant $i, discarding $goodoalt[$i] and using the latest ie $oalt[$j] . Line is:\n$line\n") ;
+		      (! $goodopos[$i]) || ($goodopos[$i] eq $opos[$j]) ||
+			  (warn "in step 1C: found several different goodopos for variant $i, discarding $goodopos[$i] and using the latest ie $opos[$j] . Line is:\n$line\n") ;
 		      $goodoref[$i] = $oref[$j] ;
 		      $goodoalt[$i] = $oalt[$j] ;
 		      $goodopos[$i] = $opos[$j] ;
@@ -327,6 +334,9 @@ while (my $infile=readdir(INDIR)) {
 	      }
 	      # if no IDs found, use '.'
 	      ($ids[$i]) || ($ids[$i] = ".") ;
+	      # sanity: we need a goodo* for each goodAltIndex
+	      ($goodoref[$i] && $goodoalt[$i] && $goodopos[$i]) ||
+		  die "in step 1C: no goodoref/goodoalt/goodopos found for good variant $i, FIXME! Line is:\n$line\n" ;
 	  }
       }
  
@@ -561,9 +571,9 @@ while (my $infile=readdir(INDIR)) {
 		$outline .= "\t".$data{"FAO"}."(".$data{"FSAF"}."/".$data{"FSAR"}.")" ;
 
 		# modify "HGVSc" and "HGVSp" 's field: remove NM_* component (BE)
-		($thisCsq{"HGVSc"} =~ s/^[A-Z]+_\d+.\d://) || 
+		(! $thisCsq{"HGVSc"}) || ($thisCsq{"HGVSc"} =~ s/^[A-Z]+_\d+.\d://) || 
 		    (warn "could not remove refseq ID from HGVSc, FIXME? ".$thisCsq{"HGVSc"}."\n") ;
-		($thisCsq{"HGVSp"} =~ s/^[A-Z]+_\d+.\d://) || 
+		(! $thisCsq{"HGVSp"}) || ($thisCsq{"HGVSp"} =~ s/^[A-Z]+_\d+.\d://) || 
 		    (warn "could not remove refseq ID from HGVSp, FIXME? ".$thisCsq{"HGVSp"}."\n") ;
 
 
