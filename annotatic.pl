@@ -31,7 +31,10 @@ use warnings;
 # absolute path of plugin and data etc...
 #my $pluginPath = "./" ;
 # IBP:
-my $pluginPath = "/results/plugins/annotatic/" ;
+# my $pluginPath = "/results/plugins/annotatic/" ;
+
+# IBP: on my local computer
+my $pluginPath = "/home/ptfngs/Bureau/Annotatic" ;
 
 
 # file holding the list of refseq NM ids for the transcripts of interest.
@@ -320,6 +323,41 @@ while (my $infile=readdir(INDIR)) {
 			  ($ids[$i]) && ($ids[$i] .= ";") ;
 			  $ids[$i] .= $oid[$j] ;
 		      }
+
+		      # Solution 1: This is that we would have had before modification of annotatic (just for insertion)
+
+		      # if ($oref[$j] eq "-"){
+		      # 	if (length $ref > 1){
+		      # 		$oref[$j] = $ref;
+		      # 		$oalt[$j] = $omapalt[$j];
+		      # 		$opos[$j] = $pos;
+		      # 	}
+		      # 	if (length $ref == 1){
+		      # 		$oref[$j] = $ref;
+		      # 		$oalt[$j] = "$oref[$j]$oalt[$j]";
+		      # 		$opos[$j] = $pos;
+		      # 	}
+		      # }
+
+		      # Solution 2: In this solution, we consider the position of the reference base which preceed variant's insertion.
+
+		      if ($oref[$j] eq "-"){
+		      	if (length $ref > 1){
+		      		my $index_preceed_base = ($opos[$j]-$pos)-1;
+		
+		      		$oref[$j] = (split(//, $ref))[$index_preceed_base];
+		      		$oalt[$j] = "$oref[$j]$oalt[$j]";
+		      		$opos[$j] = $pos+$index_preceed_base;
+		      	}
+		      	if (length $ref == 1){
+		      		$oref[$j] = $ref;
+		      		$oalt[$j] = "$oref[$j]$oalt[$j]";
+		      		$opos[$j] = $pos;
+		      	}
+		      }
+
+		      
+		      			    
 		      # sanity: if we find several orefs they shoud be identical
 		      (! $goodoref[$i]) || ($goodoref[$i] eq $oref[$j]) ||
 			  (warn "in step 1C: found several different goodoref for variant $i, discarding $goodoref[$i] and using the latest ie $oref[$j] . Line is:\n$line\n") ;
@@ -327,6 +365,8 @@ while (my $infile=readdir(INDIR)) {
 			  (warn "in step 1C: found several different goodoalt for variant $i, discarding $goodoalt[$i] and using the latest ie $oalt[$j] . Line is:\n$line\n") ;
 		      (! $goodopos[$i]) || ($goodopos[$i] eq $opos[$j]) ||
 			  (warn "in step 1C: found several different goodopos for variant $i, discarding $goodopos[$i] and using the latest ie $opos[$j] . Line is:\n$line\n") ;
+		      
+
 		      $goodoref[$i] = $oref[$j] ;
 		      $goodoalt[$i] = $oalt[$j] ;
 		      $goodopos[$i] = $opos[$j] ;
