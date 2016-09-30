@@ -31,10 +31,7 @@ use warnings;
 # absolute path of plugin and data etc...
 #my $pluginPath = "./" ;
 # IBP:
-# my $pluginPath = "/results/plugins/annotatic/" ;
-
-# IBP: on my local computer
-my $pluginPath = "/home/ptfngs/Bureau/Annotatic" ;
+my $pluginPath = "/results/plugins/annotatic/" ;
 
 
 # file holding the list of refseq NM ids for the transcripts of interest.
@@ -440,7 +437,14 @@ while (my $infile=readdir(INDIR)) {
 
 	  # Conversion of allelic frequency in percentage
 	  foreach my $f (@goodFieldsInfoMulti) {
-	      ($f eq "AF") && (${$data{$f}}[$i] = sprintf("%.0f", (${$data{$f}}[$i] * 100))."%") ;  ### modif emeric
+	      # for AF we want the freq as a percentage
+	      ($f eq "AF") && (${$data{$f}}[$i] = sprintf("%.0f", (${$data{$f}}[$i] * 100))."%") ;
+	      # for TYPE: some SNPs are incorrectly marked MNP, fix it
+	      if (($f eq "TYPE") && (${$data{$f}}[$i] ne "snp") && 
+		  ($goodoref[$i] =~ /^[ATGCatgc]$/) && ($goodoalt[$i] =~ /^[ATGCatgc]$/) ) {
+		  warn "INFO in $infile: in step 1E we changed the type of a SNP to snp at $prevChr $goodopos[$i]" ;
+		  ${$data{$f}}[$i] = "snp" ;
+	      }
 	      $outBuffer[$#outBuffer] .= ";$f=".${$data{$f}}[$i] ;
 	  }
 	  # OK, we don't keep FORMAT and indiv lines, useless
