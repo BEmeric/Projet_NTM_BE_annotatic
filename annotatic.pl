@@ -263,8 +263,10 @@ while (my $infile=readdir(INDIR)) {
       # is stored in @ids, indexed by the indexes of @goodAltIndexes.
       my @ids = () ;
       # We also construct arrays @goodoref, @goodoalt and @goodopos, also 
-      # indexed by the indexes of @goodAltIndexes, holding the "original"
+      # indexed by the indexes of @goodAltIndexes, holding the "correct"
       # REF/ALT/POS of the corresponding alt allele.
+      # "correct" will be the "original" values (from OREF/OPOS/OALT) for SNPs,
+      # but they will be adjusted for indels (so we don't get "-" refs/alts)
       my @goodoref = ();
       my @goodoalt = ();
       my @goodopos = ();
@@ -321,52 +323,46 @@ while (my $infile=readdir(INDIR)) {
 			  $ids[$i] .= $oid[$j] ;
 		      }
 
-		      # Solution 1: This is that we would have had before modification of annotatic (just for insertion)
+		      my ($newGoodRef,$newGoodAlt,$newGoodPos) ;
 
-		      # if ($oref[$j] eq "-"){
-		      # 	if (length $ref > 1){
-		      # 		$oref[$j] = $ref;
-		      # 		$oalt[$j] = $omapalt[$j];
-		      # 		$opos[$j] = $pos;
-		      # 	}
-		      # 	if (length $ref == 1){
-		      # 		$oref[$j] = $ref;
-		      # 		$oalt[$j] = "$oref[$j]$oalt[$j]";
-		      # 		$opos[$j] = $pos;
-		      # 	}
-		      # }
+		      # whenever oref and oalt are not "-", use oref/oalt/opos
+		      if (($oref[$j] ne "-") && ($oalt[$j] ne "-")) {
+			  $newGoodRef = $oref[$j] ;
+			  $newGoodAlt = $oalt[$j] ;
+			  $newGoodPos = $opos[$j] ;
+		      }
+		      elsif ($oref[$j] eq "-") {
+			  # we can't have both oref and oalt be "-", check it
+			  ($oalt[$j] ne "-") || die "in step 1C, both oref and oalt are - at index $j, impossible? in:\n$line\n" ;
+			  # we will grab the single base preceding the insertion from $ref,
+			  # and also add that base in front of oalt
+			  my $baseToAdd = (split(//, $ref))[$opos[$j]-$pos-1];
+			  $newGoodRef = $baseToAdd ;
+			  $newGoodAlt = $baseToAdd.$oalt[$j] ;
+			  $newGoodPos = $opos[$j]-1 ;
+		      }
+		      else {
+			  # oref is not "-" but oalt=="-" : this is a deletion, we will
+			  # grab the single base preceding the deletion for alt and also
+			  # add that base in front of oref
+			  my $baseToAdd = (split(//, $omapalt[$j]))[$opos[$j]-$pos-1];
 
-		      # Solution 2: In this solution, we consider the position of the reference base which preceed variant's insertion.
-
-		      if ($oref[$j] eq "-"){
-		      	if (length $ref > 1){
-		      		my $index_preceed_base = ($opos[$j]-$pos)-1;
-		
-		      		$oref[$j] = (split(//, $ref))[$index_preceed_base];
-		      		$oalt[$j] = "$oref[$j]$oalt[$j]";
-		      		$opos[$j] = $pos+$index_preceed_base;
-		      	}
-		      	if (length $ref == 1){
-		      		$oref[$j] = $ref;
-		      		$oalt[$j] = "$oref[$j]$oalt[$j]";
-		      		$opos[$j] = $pos;
-		      	}
+			  $newGoodRef = $baseToAdd.$oref[$j] ;
+			  $newGoodAlt = $baseToAdd ;
+			  $newGoodPos = $opos[$j]-1 ;
 		      }
 
-		      
-		      			    
 		      # sanity: if we find several orefs they shoud be identical
-		      (! $goodoref[$i]) || ($goodoref[$i] eq $oref[$j]) ||
-			  (warn "in step 1C: found several different goodoref for variant $i, discarding $goodoref[$i] and using the latest ie $oref[$j] . Line is:\n$line\n") ;
-		      (! $goodoalt[$i]) || ($goodoalt[$i] eq $oalt[$j]) ||
-			  (warn "in step 1C: found several different goodoalt for variant $i, discarding $goodoalt[$i] and using the latest ie $oalt[$j] . Line is:\n$line\n") ;
-		      (! $goodopos[$i]) || ($goodopos[$i] eq $opos[$j]) ||
-			  (warn "in step 1C: found several different goodopos for variant $i, discarding $goodopos[$i] and using the latest ie $opos[$j] . Line is:\n$line\n") ;
-		      
+		      (! $goodoref[$i]) || ($goodoref[$i] eq $newGoodRef) ||
+			  (warn "in step 1C: found several different goodoref for variant $i, discarding $goodoref[$i] and using the latest ie $newGoodRef . Line is:\n$line\n") ;
+		      (! $goodoalt[$i]) || ($goodoalt[$i] eq $newGoodAlt) ||
+			  (warn "in step 1C: found several different goodoalt for variant $i, discarding $goodoalt[$i] and using the latest ie $newGoodAlt . Line is:\n$line\n") ;
+		      (! $goodopos[$i]) || ($goodopos[$i] eq $newGoodPos) ||
+			  (warn "in step 1C: found several different goodopos for variant $i, discarding $goodopos[$i] and using the latest ie $newGoodPos . Line is:\n$line\n") ;
 
-		      $goodoref[$i] = $oref[$j] ;
-		      $goodoalt[$i] = $oalt[$j] ;
-		      $goodopos[$i] = $opos[$j] ;
+		      $goodoref[$i] = $newGoodRef ;
+		      $goodoalt[$i] = $newGoodAlt ;
+		      $goodopos[$i] = $newGoodPos ;
 		  }
 	      }
 	      # if no IDs found, use '.'
