@@ -317,12 +317,6 @@ while (my $infile=readdir(INDIR)) {
 	      foreach my $j (0..$#oid) {
 		  if ($omapalt[$j] eq $alts[$goodAltIndexes[$i]]) {
 		      # the j-th OMAPALT matches the i-th goodAlt
-		      if ($oid[$j] ne ".") {
-			  # this o* has an OID and it's not '.'
-			  ($ids[$i]) && ($ids[$i] .= ";") ;
-			  $ids[$i] .= $oid[$j] ;
-		      }
-
 		      my ($newGoodRef,$newGoodAlt,$newGoodPos) ;
 
 		      # whenever oref and oalt are not "-", use oref/oalt/opos
@@ -345,7 +339,15 @@ while (my $infile=readdir(INDIR)) {
 			  # oref is not "-" but oalt=="-" : this is a deletion, we will
 			  # grab the single base preceding the deletion for alt and also
 			  # add that base in front of oref
-			  my $baseToAdd = (split(//, $omapalt[$j]))[$opos[$j]-$pos-1];
+			  # NOTE: some variants should NOT appear at all, this is a bug in the variant
+			  # caller, see AnnotaticBug_Emeric_161020/ and emails eg 03/11/2016.
+			  # Trying to solve this here:
+			  my @splitmapalt = split(//, $omapalt[$j]) ;
+			  if ($#splitmapalt < $opos[$j]-$pos-1) {
+			      warn "in step 1C: the OID number $j is a deletion seemingly matching variant $i but coordinates dont fit, ignoring this OID. Line is:\n$line\n" ;
+			      next ;
+			  }
+			  my $baseToAdd = $splitmapalt[$opos[$j]-$pos-1];
 
 			  $newGoodRef = $baseToAdd.$oref[$j] ;
 			  $newGoodAlt = $baseToAdd ;
@@ -363,6 +365,12 @@ while (my $infile=readdir(INDIR)) {
 		      $goodoref[$i] = $newGoodRef ;
 		      $goodoalt[$i] = $newGoodAlt ;
 		      $goodopos[$i] = $newGoodPos ;
+
+		      if ($oid[$j] ne ".") {
+			  # this o* has an OID and it's not '.'
+			  ($ids[$i]) && ($ids[$i] .= ";") ;
+			  $ids[$i] .= $oid[$j] ;
+		      }
 		  }
 	      }
 	      # if no IDs found, use '.'
