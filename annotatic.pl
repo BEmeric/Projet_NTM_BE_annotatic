@@ -319,6 +319,14 @@ while (my $infile=readdir(INDIR)) {
 		      # the j-th OMAPALT matches the i-th goodAlt
 		      my ($newGoodRef,$newGoodAlt,$newGoodPos) ;
 
+		      # we trust the upstream regularization of variants, so assume
+		      # that if omapalt matches alt the corresponding OID is good
+		      if ($oid[$j] ne ".") {
+			  # this o* has an OID and it's not '.'
+			  ($ids[$i]) && ($ids[$i] .= ";") ;
+			  $ids[$i] .= $oid[$j] ;
+		      }
+
 		      # whenever oref and oalt are not "-", use oref/oalt/opos
 		      if (($oref[$j] ne "-") && ($oalt[$j] ne "-")) {
 			  $newGoodRef = $oref[$j] ;
@@ -326,11 +334,25 @@ while (my $infile=readdir(INDIR)) {
 			  $newGoodPos = $opos[$j] ;
 		      }
 		      elsif ($oref[$j] eq "-") {
+			  # insertion
 			  # we can't have both oref and oalt be "-", check it
 			  ($oalt[$j] ne "-") || die "in step 1C, both oref and oalt are - at index $j, impossible? in:\n$line\n" ;
 			  # we will grab the single base preceding the insertion from $ref,
 			  # and also add that base in front of oalt
-			  my $baseToAdd = (split(//, $ref))[$opos[$j]-$pos-1];
+			  # NOTE: COSMIC variants are not regularized but it seems upstream
+			  # variant caller does the regularization to identify equivalent indels.
+			  # We assume here that one of the equivalent COSMIC entries matches the REF/ALT
+			  # regularization performed by the variant caller, and we only use that entry.
+			  # This assumption isn't dangerous because if it isn't met we will have no 
+			  # $goodoref[$i] and therefore die cleanly later.
+			  # See AnnotaticBug_Emeric_161020/ and emails around 03/11/2016.
+			  my @splitref = split(//, $ref) ;
+			  if ($#splitref < $opos[$j]-$pos-1) {
+			      warn "in step 1C: the OID number $j is an insertion seemingly matching variant $i but coordinates dont fit, an equivalent OID will (should) be used, ignoring this OID. Line is:\n$line\n" ;
+			      next ;
+			  }
+			  my $baseToAdd = $splitref[$opos[$j]-$pos-1];
+
 			  $newGoodRef = $baseToAdd ;
 			  $newGoodAlt = $baseToAdd.$oalt[$j] ;
 			  $newGoodPos = $opos[$j]-1 ;
@@ -339,12 +361,10 @@ while (my $infile=readdir(INDIR)) {
 			  # oref is not "-" but oalt=="-" : this is a deletion, we will
 			  # grab the single base preceding the deletion for alt and also
 			  # add that base in front of oref
-			  # NOTE: some variants should NOT appear at all, this is a bug in the variant
-			  # caller, see AnnotaticBug_Emeric_161020/ and emails eg 03/11/2016.
-			  # Trying to solve this here:
+			  # NOTE: same idea as for insertions regarding regularization, see above NOTE.
 			  my @splitmapalt = split(//, $omapalt[$j]) ;
 			  if ($#splitmapalt < $opos[$j]-$pos-1) {
-			      warn "in step 1C: the OID number $j is a deletion seemingly matching variant $i but coordinates dont fit, ignoring this OID. Line is:\n$line\n" ;
+			      warn "in step 1C: the OID number $j is a deletion seemingly matching variant $i but coordinates dont fit, an equivalent OID will (should) be used, ignoring this OID. Line is:\n$line\n" ;
 			      next ;
 			  }
 			  my $baseToAdd = $splitmapalt[$opos[$j]-$pos-1];
@@ -365,12 +385,6 @@ while (my $infile=readdir(INDIR)) {
 		      $goodoref[$i] = $newGoodRef ;
 		      $goodoalt[$i] = $newGoodAlt ;
 		      $goodopos[$i] = $newGoodPos ;
-
-		      if ($oid[$j] ne ".") {
-			  # this o* has an OID and it's not '.'
-			  ($ids[$i]) && ($ids[$i] .= ";") ;
-			  $ids[$i] .= $oid[$j] ;
-		      }
 		  }
 	      }
 	      # if no IDs found, use '.'
